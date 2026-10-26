@@ -986,6 +986,26 @@ if (report_error == 0) {
 
     kvm_trace__report_printf("\nPath definition: exact ordered PC sequence per file.\n");
     kvm_trace__report_printf("Edge definition: directed pair of consecutive PCs.\n");
+	
+
+if (report) {
+    if (fflush(report) == EOF && report_error == 0)
+        report_error = -(errno ? errno : EIO);
+
+    if (ferror(report) && report_error == 0)
+        report_error = -EIO;
+
+    if (fclose(report) == EOF && report_error == 0)
+        report_error = -(errno ? errno : EIO);
+
+    report = NULL;
+}
+
+if (report_error == 0)
+    pr_info("Trace report saved to '%s'\n", report_path);
+
+free(report_path);
+
 
     for (size_t i = 0; i < summary_count; i++)
         free(summaries[i].path);
@@ -997,6 +1017,10 @@ if (report_error == 0) {
     if (dir_error)
         return dir_error;
 
+if (report_error)
+    return report_error;
+
+return errors ? -EIO : 0;
     return errors ? -EIO : 0;
 }
 
