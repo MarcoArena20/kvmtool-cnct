@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include <stdarg.h>
 
 struct kvm_trace *kvm_trace__create(size_t capacity)
 {
@@ -572,10 +573,77 @@ static void sort_path_indices(
 }
 
 
+static int kvm_trace__build_report_path(const char *dir_path,
+                                        char **report_path)
+{
+    const char *name = "trace_report.txt";
+    size_t dir_len, name_len, sep_len, path_len;
+    bool has_slash;
+    int n;
+
+    if (!dir_path || !*dir_path || !report_path)
+        return -EINVAL;
+
+    *report_path = NULL;
+
+    dir_len = strlen(dir_path);
+    name_len = strlen(name);
+    has_slash = dir_path[dir_len - 1] == '/';
+    sep_len = has_slash ? 0 : 1;
+
+    if (dir_len > SIZE_MAX - sep_len ||
+        dir_len + sep_len > SIZE_MAX - name_len - 1)
+        return -ENAMETOOLONG;
+
+    path_len = dir_len + sep_len + name_len + 1;
+
+    *report_path = malloc(path_len);
+    if (!*report_path)
+        return -ENOMEM;
+
+    n = snprintf(*report_path, path_len, "%s%s%s",
+                 dir_path, has_slash ? "" : "/", name);
+
+    if (n < 0 || (size_t)n >= path_len) {
+        free(*report_path);
+        *report_path = NULL;
+        return -ENAMETOOLONG;
+    }
+
+    return 0;
+}
+
+static int kvm_trace__report_printf(FILE *report,
+                                   const char *fmt, ...)
+{
+    va_list ap, copy;
+    int console_ret, file_ret = 0;
+
+    va_start(ap, fmt);
+    va_copy(copy, ap);
+
+    console_ret = vprintf(fmt, ap);
+
+    if (report)
+        file_ret = vfprintf(report, fmt, copy);
+
+    va_end(copy);
+    va_end(ap);
+
+    if (console_ret < 0 || (report && file_ret < 0))
+        return -EIO;
+
+    return 0;
+}
+
 
 int kvm_trace__analyze_dir(const char *dir_path)
 {
-    DIR *dir;
+    FILE *report = NULL;
+	char *report_path = NULL;
+	int report_error = 0;
+	
+	DIR *dir;
     struct dirent *entry;
     struct kvm_trace_file_summary *summaries = NULL;
     uint64_t *all_pcs = NULL;
@@ -799,6 +867,22 @@ int kvm_trace__analyze_dir(const char *dir_path)
 
     if (closedir(dir) < 0 && !dir_error)
         dir_error = -errno;
+	
+	report_error = kvm_trace__build_report_path(dir_path,
+                                             &report_path);
+
+if (report_error == 0) {
+    report = fopen(report_path, "w");
+
+    if (!report) {
+        report_error = -errno;
+        pr_err("Cannot create report '%s': %s\n",
+               report_path, strerror(errno));
+    }
+} else {
+    pr_err("Cannot build report path: %s\n",
+           strerror(-report_error));
+}
 
     /*
      * Calcola i path globalmente unici confrontando le sequenze
@@ -869,13 +953,13 @@ int kvm_trace__analyze_dir(const char *dir_path)
               compare_trace_summaries);
     }
 
-    printf("\nTrace ranking (instructions descending)\n\n");
-    printf("%-5s %-40s %12s %14s %14s\n",
+    kvm_trace__report_printf("\nTrace ranking (instructions descending)\n\n");
+    kvm_trace__report_printf("%-5s %-40s %12s %14s %14s\n",
            "Rank", "Trace", "Instructions",
            "Unique PCs", "Unique edges");
 
     for (size_t i = 0; i < summary_count; i++) {
-        printf("%-5zu %-40s %12zu %14zu %14zu\n",
+        kvm_trace__report_printf("%-5zu %-40s %12zu %14zu %14zu\n",
                i + 1,
                summaries[i].path,
                summaries[i].instructions,
@@ -883,25 +967,25 @@ int kvm_trace__analyze_dir(const char *dir_path)
                summaries[i].unique_edges);
     }
 
-    printf("\nGlobal coverage summary\n\n");
-    printf("Valid traces:                   %zu\n", summary_count);
-    printf("Invalid or failed traces:       %zu\n", errors);
-    printf("Total instruction observations: %zu\n", pc_count);
-    printf("Globally unique instruction PCs: %zu\n",
+    kvm_trace__report_printf("\nGlobal coverage summary\n\n");
+    kvm_trace__report_printf("Valid traces:                   %zu\n", summary_count);
+    kvm_trace__report_printf("Invalid or failed traces:       %zu\n", errors);
+    kvm_trace__report_printf("Total instruction observations: %zu\n", pc_count);
+    kvm_trace__report_printf("Globally unique instruction PCs: %zu\n",
            global_unique_pcs);
-    printf("Total edge observations:        %zu\n", edge_count);
-    printf("Globally unique directed edges: %zu\n",
+    kvm_trace__report_printf("Total edge observations:        %zu\n", edge_count);
+    kvm_trace__report_printf("Globally unique directed edges: %zu\n",
            global_unique_edges);
 
     if (!path_error) {
-        printf("Distinct complete PC paths:     %zu / %zu traces\n",
+        kvm_trace__report_printf("Distinct complete PC paths:     %zu / %zu traces\n",
                unique_paths, summary_count);
     } else {
-        printf("Distinct complete PC paths:     unavailable\n");
+        kvm_trace__report_printf("Distinct complete PC paths:     unavailable\n");
     }
 
-    printf("\nPath definition: exact ordered PC sequence per file.\n");
-    printf("Edge definition: directed pair of consecutive PCs.\n");
+    kvm_trace__report_printf("\nPath definition: exact ordered PC sequence per file.\n");
+    kvm_trace__report_printf("Edge definition: directed pair of consecutive PCs.\n");
 
     for (size_t i = 0; i < summary_count; i++)
         free(summaries[i].path);
