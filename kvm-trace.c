@@ -953,13 +953,13 @@ int kvm_trace__analyze_dir(const char *dir_path)
               		compare_trace_summaries);
     	}
 
-    	kvm_trace__report_printf("\nTrace ranking (instructions descending)\n\n");
-    	kvm_trace__report_printf("%-5s %-40s %12s %14s %14s\n",
+    	kvm_trace__report_printf(report, "\nTrace ranking (instructions descending)\n\n");
+    	kvm_trace__report_printf(report, "%-5s %-40s %12s %14s %14s\n",
            	"Rank", "Trace", "Instructions",
            	"Unique PCs", "Unique edges");
 
     	for (size_t i = 0; i < summary_count; i++) {
-        	kvm_trace__report_printf("%-5zu %-40s %12zu %14zu %14zu\n",
+        	kvm_trace__report_printf(report, "%-5zu %-40s %12zu %14zu %14zu\n",
                	i + 1,
                	summaries[i].path,
                	summaries[i].instructions,
@@ -967,25 +967,25 @@ int kvm_trace__analyze_dir(const char *dir_path)
                	summaries[i].unique_edges);
     	}
 
-    	kvm_trace__report_printf("\nGlobal coverage summary\n\n");
-    	kvm_trace__report_printf("Valid traces:                   %zu\n", summary_count);
-    	kvm_trace__report_printf("Invalid or failed traces:       %zu\n", errors);
-    	kvm_trace__report_printf("Total instruction observations: %zu\n", pc_count);
-    	kvm_trace__report_printf("Globally unique instruction PCs: %zu\n",
+    	kvm_trace__report_printf(report, "\nGlobal coverage summary\n\n");
+    	kvm_trace__report_printf(report, "Valid traces:                   %zu\n", summary_count);
+    	kvm_trace__report_printf(report, "Invalid or failed traces:       %zu\n", errors);
+    	kvm_trace__report_printf(report, "Total instruction observations: %zu\n", pc_count);
+    	kvm_trace__report_printf(report, "Globally unique instruction PCs: %zu\n",
            global_unique_pcs);
-    	kvm_trace__report_printf("Total edge observations:        %zu\n", edge_count);
-    	kvm_trace__report_printf("Globally unique directed edges: %zu\n",
+    	kvm_trace__report_printf(report, "Total edge observations:        %zu\n", edge_count);
+    	kvm_trace__report_printf(report, "Globally unique directed edges: %zu\n",
            global_unique_edges);
 
     	if (!path_error) {
-        	kvm_trace__report_printf("Distinct complete PC paths:     %zu / %zu traces\n",
+        	kvm_trace__report_printf(report, "Distinct complete PC paths:     %zu / %zu traces\n",
                	unique_paths, summary_count);
     	} else {
-        	kvm_trace__report_printf("Distinct complete PC paths:     unavailable\n");
+        	kvm_trace__report_printf(report, "Distinct complete PC paths:     unavailable\n");
     	}
 
-    	kvm_trace__report_printf("\nPath definition: exact ordered PC sequence per file.\n");
-    	kvm_trace__report_printf("Edge definition: directed pair of consecutive PCs.\n");
+    	kvm_trace__report_printf(report, "\nPath definition: exact ordered PC sequence per file.\n");
+    	kvm_trace__report_printf(report, "Edge definition: directed pair of consecutive PCs.\n");
 	
 
 	if (report) {
